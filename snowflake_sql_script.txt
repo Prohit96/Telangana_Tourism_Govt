@@ -1,0 +1,220 @@
+create database tourism
+
+use tourism
+
+create or replace table domestic_visitors(
+district varchar(50), 
+date DATE, 
+month varchar(30), 
+year int,
+visitors int)
+
+select * from "TOURISM"."PUBLIC"."DOMESTIC_VISITORS"
+
+create or replace table foreign_visitors(
+district varchar(50), 
+date DATE, 
+month varchar(30), 
+year int,
+visitors int)
+
+select * from "TOURISM"."PUBLIC"."FOREIGN_VISITORS"
+
+
+
+--1. Top 10 district of highest Domestic Visitors(2016-2019)?
+
+Select district,sum(visitors) as total_visitors  
+from domestic_visitors
+group by district 
+order by total_visitors desc limit 10;
+
+--2. Top 3 district based on CAGR of visitors between(2016-2019)?
+
+-- For Domestic Visitors
+
+with Domestic_CAGR as(
+Select district,
+sum(case when year = 2016 Then visitors else 0 End) as Intial_value,   --#all the visitors from 2016 district wise
+sum(case when year = 2019 Then visitors else 0 End) as Future_value	 --#all the visitors from 2019 district wise
+from domestic_visitors
+group by district
+)
+select district,Intial_value,Future_value, round((power((Future_value/Intial_value),1/3)-1)*100,2) as CAGR
+from Domestic_CAGR
+order by CAGR desc limit 3;
+
+-- For Foreign Visitors
+
+with Foreign_CAGR as(
+select district, 
+sum(case when year = 2016 then visitors else 0 End) as Intial_value, --#All visitors from 2016
+sum(case when year = 2019 then visitors else 0 End) as Future_value --#All visitors from 2019
+from foreign_visitors
+Group by district)
+select district, Intial_value, Future_value, round((power((Future_value/Intial_value),1/3)) * 100,2) as CAGR
+from Foreign_CAGR
+Order by CAGR desc
+limit 3;
+
+
+--3.Peak season months for hyderabad from 2016-2019 ( foreign_visitors)
+
+SELECT month,Sum(visitors) as peak_seasons
+From foreign_visitors
+Where district =  'Hyderabad'
+Group by month
+Order by peak_seasons desc
+limit 3;
+
+# Peak season months for hyderabad from 2016-2019 ( domestic_visitors)
+
+SELECT month, SUM(visitors) as peak_season
+From domestic_visitors
+Where district =  'Hyderabad'
+Group by month
+Order by peak_season desc
+limit 3;
+
+# low season for domestic visitors (hyderabad)
+
+SELECT month, SUM(visitors) as low_season
+From domestic_visitors
+Where district =  'Hyderabad'
+Group by month
+Order by low_season ASC
+limit 3;
+
+
+select * from domestic_visitors
+select district, year from domestic_visitors where year = 2016
+
+
+--4.Finding top domestic to foreign ratio districts
+WITH DtoF AS (
+  SELECT 
+    domestic_visitors.district, 
+    SUM(domestic_visitors.visitors) AS Domestic_visitors,
+    SUM(foreign_visitors.visitors) AS Foreign_visitors
+  FROM 
+    domestic_visitors
+    JOIN foreign_visitors
+      ON domestic_visitors.district = foreign_visitors.district 
+        AND domestic_visitors.year = foreign_visitors.year 
+        AND domestic_visitors.month = foreign_visitors.month
+  GROUP BY 
+    domestic_visitors.district
+)
+SELECT 
+  district, 
+  Domestic_visitors, 
+  Foreign_visitors, 
+  DtoF_Ratio
+FROM (
+  SELECT 
+    *, 
+    ROUND(Domestic_visitors/Foreign_visitors) AS DtoF_Ratio 
+  FROM 
+    DtoF 
+  ORDER BY 
+    DtoF_Ratio ASC
+) AS sorted_data
+WHERE DtoF_Ratio is Not Null
+Limit 3;
+
+
+#Finding bottom domestic to foreign ratio districts
+WITH DtoF AS (
+  SELECT 
+    domestic_visitors.district, 
+    SUM(domestic_visitors.visitors) AS Domestic_visitors,
+    SUM(foreign_visitors.visitors) AS Foreign_visitors
+  FROM 
+    domestic_visitors 
+    JOIN foreign_visitors 
+      ON domestic_visitors.district = foreign_visitors.district 
+        AND domestic_visitors.year = foreign_visitors.year 
+        AND domestic_visitors.month = foreign_visitors.month
+  GROUP BY 
+    domestic_visitors.district
+)
+SELECT 
+  district, 
+  Domestic_visitors, 
+  Foreign_visitors, 
+  DtoF_Ratio
+FROM (
+  SELECT 
+    *, 
+    ROUND(Domestic_visitors/Foreign_visitors) AS DtoF_Ratio 
+  FROM 
+    DtoF 
+  ORDER BY 
+    DtoF_Ratio DESC
+) AS subquery
+WHERE DtoF_Ratio is Not Null
+Limit 3;
+
+
+
+UPDATE population_2011 
+SET Estimated_2019 = ROUND(Population_2011 * POWER(1.11, 8)), --# Creating new column Estimated population for 2019
+    Estimated_2025 = ROUND(Population_2011 * POWER(1.11, 14));  --# Creating new column Estimated population for 2025
+
+# Merging both domestic and foreign to find footfall ration for both
+SELECT district, year, visitors
+FROM domestic_visitors
+UNION ALL
+SELECT district, year, visitors
+FROM foreign_visitors
+
+
+
+-- Query 6 Projected  number of domestic visitors and project number of revenue from them
+
+WITH cte AS (
+  SELECT 
+    district,
+    SUM(CASE WHEN year = 2016 THEN visitors ELSE 0 END) AS visitors_2016, -- all visitors from 2016 district wise
+    SUM(CASE WHEN year = 2019 THEN visitors ELSE 0 END) AS visitors_2019 -- all visitors from 2019 district wise
+  FROM domestic_visitors
+  GROUP BY district
+  HAVING district = 'Hyderabad'
+),
+cte2 AS (
+  SELECT 
+    visitors_2019 AS dom_visitors_2019,
+    (POWER((visitors_2019/visitors_2016),(1/3))-1) AS AGR -- AGR = -0.16
+  FROM cte
+)
+SELECT 
+  dom_visitors_2019 as Visitors_2019,
+  dom_visitors_2019 * 1200 AS Revenue_2019,
+  ROUND(dom_visitors_2019 * POWER((1-0.16),6)) AS Visitors_2025,
+  ROUND(dom_visitors_2019 * POWER((1-0.16),6)) * 1200 AS Revenue_2025
+FROM cte2;
+
+
+#Projected  number of foreign visitors and project number of revenue from them
+
+WITH cte AS (
+  SELECT 
+    district,
+    SUM(CASE WHEN year = 2016 THEN visitors ELSE 0 END) AS visitors_2016, -- all visitors from 2016 district wise
+    SUM(CASE WHEN year = 2019 THEN visitors ELSE 0 END) AS visitors_2019 -- all visitors from 2019 district wise
+  FROM foreign_visitors
+  GROUP BY district
+  HAVING district = 'Hyderabad'
+),
+cte2 AS (
+  SELECT 
+    visitors_2019 AS Foreign_visitors_2019,
+    (POWER((visitors_2019/visitors_2016),(1/3))-1) AS AGR -- AGR = -0.16
+  FROM cte
+)
+SELECT 
+  Foreign_visitors_2019 as Visitors_2019,
+  Foreign_visitors_2019 * 1200 AS Revenue_2019,
+  ROUND(Foreign_visitors_2019 * POWER((1-0.16),6)) AS Visitors_2025,
+  ROUND(Foreign_visitors_2019 * POWER((1-0.16),6)) * 1200 AS Revenue_2025
+FROM cte2;
